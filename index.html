@@ -1,0 +1,782 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style></head><body><title>Rota Trip Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the service (left) and a "behind the scenes" rail (right) that names the core function and who does what at each step. */
+:root{
+  --bg:#EEF2EF; --surface:#FAFCFA; --sunk:#E3E9E5; --ink:#10232A; --muted:#4D5F64; --line:#CBD5D0;
+  --ai:#2D55E0; --ai-soft:#E3E9FD; --you:#C9541A; --you-soft:#FBE7DC; --ok:#1F7A4D; --ok-soft:#DDF1E6;
+  --warn:#9A6200; --warn-soft:#FBEFD3; --bad:#B3261E; --bad-soft:#F9E1DF;
+  --display:'Bricolage Grotesque', 'Trebuchet MS', sans-serif; --body:'Figtree', 'Segoe UI', Arial, sans-serif; --mono:'JetBrains Mono', Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1A1E; --surface:#13252A; --sunk:#0A1518; --ink:#E7EFEC; --muted:#A3B4B6; --line:#2A3F45;
+  --ai:#8FA8FF; --ai-soft:#1C2A55; --you:#FF9A62; --you-soft:#4A2614; --ok:#6FD3A0; --ok-soft:#163A2A;
+  --warn:#F2C25B; --warn-soft:#3D2E0C; --bad:#FF8A80; --bad-soft:#4A1B18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1A1E; --surface:#13252A; --sunk:#0A1518; --ink:#E7EFEC; --muted:#A3B4B6; --line:#2A3F45;
+  --ai:#8FA8FF; --ai-soft:#1C2A55; --you:#FF9A62; --you-soft:#4A2614; --ok:#6FD3A0; --ok-soft:#163A2A;
+  --warn:#F2C25B; --warn-soft:#3D2E0C; --bad:#FF8A80; --bad-soft:#4A1B18; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1280px;margin:0 auto}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.topin{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-block:12px}
+.logo{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.02em;display:flex;align-items:baseline;gap:10px}
+.logo i{font-style:normal;display:inline-block;width:12px;height:12px;border-radius:50%;background:var(--you);box-shadow:16px 0 0 var(--ai)}
+.logo small{font-family:var(--body);font-weight:500;font-size:14px;color:var(--muted);margin-left:14px}
+.spacer{flex:1}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface)}
+.pill.live{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+button{font:inherit;color:inherit;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;font-weight:600;font-size:14px}
+.btn:hover{border-color:var(--ink)}
+.btn:focus-visible,.chip:focus-visible,.step:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--ai);outline-offset:2px}
+.btn.you{background:var(--you);border-color:var(--you);color:#fff}
+:root[data-theme="dark"] .btn.you{color:#1b0d05}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.you{color:#1b0d05}}
+.btn.you::before{content:"You decide · ";font-weight:500;opacity:.85}
+.btn.ai{background:var(--ai-soft);border-color:var(--ai);color:var(--ai)}
+.btn.ghost{background:transparent}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+nav.stepper{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding-block:10px 12px}
+.step{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;text-align:left;min-width:0}
+.step b{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+.step span{display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.step.on{border-color:var(--ink);background:var(--ink);color:var(--surface)}
+.step.on b{color:var(--surface);opacity:.8}
+.step.done span::after{content:" ✓";color:var(--ok)}
+.step.on.done span::after{color:var(--surface)}
+main.layout{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;padding-block:20px 80px}
+@media (max-width:900px){main.layout{grid-template-columns:minmax(0,1fr)} nav.stepper{grid-template-columns:repeat(4,minmax(0,1fr))} .logo small{display:none}}
+@media (max-width:900px){header.top{position:static}}
+@media (max-width:480px){nav.stepper{gap:4px} .step{padding:6px 8px} .step span{font-size:13px}}
+.app{min-width:0;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.015em;text-wrap:balance;margin:0}
+h1{font-size:30px;font-weight:700;line-height:1.1}
+h2{font-size:21px;font-weight:700}
+h3{font-size:16px;font-weight:700;font-family:var(--body)}
+p{margin:0}
+.lede{color:var(--muted);max-width:65ch}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.ai-made{border-left:4px solid var(--ai)}
+.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px}
+.tag.ai{background:var(--ai-soft);color:var(--ai)}
+.tag.you{background:var(--you-soft);color:var(--you)}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.warn{background:var(--warn-soft);color:var(--warn)}
+.tag.bad{background:var(--bad-soft);color:var(--bad)}
+.tag.plain{background:var(--sunk);color:var(--muted)}
+body.noroles .tag.ai,body.noroles .tag.you,body.noroles .btn.you::before{display:none}
+body.noroles .ai-made{border-left-width:1px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+label{font-weight:600;font-size:13px;display:block;margin-bottom:4px}
+input[type=text],textarea,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{min-height:84px;resize:vertical}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:500}
+.chip.on{background:var(--you-soft);border-color:var(--you);color:var(--you);font-weight:700}
+.chip.ai{border-color:var(--ai)}
+/* feed */
+.feed{display:flex;flex-direction:column;gap:8px}
+.msg{max-width:78%;padding:10px 14px;border-radius:14px;white-space:pre-wrap}
+.msg.rota{background:var(--ai-soft);color:var(--ink);border-bottom-left-radius:4px;align-self:flex-start}
+.msg.rota::before{content:"Rota";display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ai);margin-bottom:2px}
+.msg.you{background:var(--you-soft);border-bottom-right-radius:4px;align-self:flex-end}
+.msg.you::before{content:"You";display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--you);margin-bottom:2px}
+.typing{align-self:flex-start;background:var(--ai-soft);border-radius:14px;padding:12px 16px;display:flex;gap:5px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--ai);animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){.typing i{animation:none}}
+/* timeline */
+.tl{display:flex;flex-direction:column}
+.blk{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:12px;padding:10px 0;border-top:1px solid var(--line);align-items:start}
+.blk:first-child{border-top:none}
+.blk .t{font-family:var(--mono);font-size:13px;font-weight:600;padding-top:2px;font-variant-numeric:tabular-nums}
+.blk .ttl{font-weight:700}
+.blk .meta{font-size:13px;color:var(--muted)}
+.blk.past{opacity:.5}
+.blk.now{background:linear-gradient(90deg,var(--you-soft),transparent);border-radius:6px}
+.blk.added{background:var(--ok-soft);border-radius:6px}
+.blk.removed{background:var(--bad-soft);border-radius:6px}
+.blk.removed .ttl{text-decoration:line-through}
+.blk.moved .t{color:var(--you)}
+.nowline{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--you);font-weight:600;padding:4px 0}
+.nowline::after{content:"";flex:1;height:2px;background:var(--you)}
+.conf{font-size:11px}
+/* behind the scenes */
+.bts{min-width:0;display:flex;flex-direction:column;gap:12px;align-self:start;position:sticky;top:calc(env(safe-area-inset-top,0px) + 150px)}
+@media (max-width:900px){.bts{position:static}}
+.bts .card{padding:14px}
+.bts dt{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:10px}
+.bts dt:first-child{margin-top:0}
+.bts dd{margin:2px 0 0}
+.bts .who-ai{border-left:3px solid var(--ai);padding-left:8px}
+.bts .who-you{border-left:3px solid var(--you);padding-left:8px}
+.rule{font-family:var(--display);font-size:20px;font-weight:700;line-height:1.15}
+.rule em{font-style:normal;color:var(--ai)} .rule strong{color:var(--you)}
+.banner{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-radius:8px;background:var(--warn-soft);color:var(--ink);border:1px solid var(--warn)}
+.banner b{color:var(--warn);white-space:nowrap}
+.optcard{display:flex;flex-direction:column;gap:10px;cursor:pointer;text-align:left}
+.optcard.on{border-color:var(--you);box-shadow:0 0 0 2px var(--you)}
+.stat{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.stat b{color:var(--ink);font-family:var(--mono);font-weight:600}
+ul.why{margin:0;padding-left:18px;font-size:14px}
+.prog{height:8px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.check{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 0;border-top:1px solid var(--line)}
+.check:first-child{border-top:none}
+.check input{width:20px;height:20px;accent-color:var(--you);margin-top:2px}
+.small{font-size:13px;color:var(--muted)}
+a{color:var(--ai)}
+pre.draft{white-space:pre-wrap;font-family:var(--body);background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:10px;margin:8px 0 0;font-size:14px}
+.diff{display:flex;flex-direction:column;gap:6px}
+.diff div{font-size:14px;padding:6px 10px;border-radius:6px}
+.diff .rm{background:var(--bad-soft)} .diff .ad{background:var(--ok-soft)} .diff .mv{background:var(--you-soft)} .diff .nt{background:var(--sunk)}
+.story p{margin-bottom:10px;max-width:65ch}
+.para{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.para.off p{opacity:.4;text-decoration:line-through}
+.share{background:var(--ink);color:var(--surface);border-radius:var(--r);padding:20px}
+.share h3{font-family:var(--display);font-size:22px;margin-bottom:8px}
+.share p{opacity:.9;margin-bottom:8px;font-size:14px}
+/* wizard */
+.wizard{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100vw - 32px));z-index:20;background:var(--surface);border:2px solid var(--ink);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);padding:14px;display:flex;flex-direction:column;gap:10px;max-height:80vh;overflow:auto}
+.wizard h3{font-family:var(--display);font-size:18px}
+.wz-pending{background:var(--you-soft);border-radius:8px;padding:8px 10px;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:8px;font-weight:600;z-index:30;max-width:calc(100vw - 32px)}
+.kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 5px}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="topin">
+      <div class="logo"><i aria-hidden="true"></i><span style="margin-left:14px">Rota</span><small>A trip planner that adapts with you · 2026 prototype</small></div>
+      <div class="spacer"></div>
+      <span id="modePill" class="pill">Scripted demo</span>
+      <button id="liveBtn" class="btn ghost" hidden>Use live AI</button>
+      <button id="rolesBtn" class="btn ghost" aria-pressed="true">Roles: on</button>
+      <button id="wizBtn" class="btn ghost" title="Wizard of Oz console (W)">Wizard <span class="kbd">W</span></button>
+      <button id="resetBtn" class="btn ghost">Restart</button>
+    </div>
+    <nav class="stepper" id="stepper" aria-label="Journey steps"></nav>
+  </div>
+</header>
+
+<main class="wrap layout">
+  <section class="app" id="app" aria-live="polite"></section>
+  <aside class="bts" id="bts" aria-label="Behind the scenes"></aside>
+</main>
+
+<div class="wizard" id="wizard" hidden>
+  <div class="row"><h3>Wizard of Oz console</h3><div class="spacer"></div><button class="btn ghost" id="wizClose">Close</button></div>
+  <p class="small">A teammate plays Rota here. Messages appear in the traveler's view as if the AI wrote them.</p>
+  <div id="wzPending"></div>
+  <div><label for="wzText">Type Rota's reply</label><textarea id="wzText" placeholder="e.g. Got it. Rain from 13:00 — I'd swap the park for a museum. Want to see the plan?"></textarea></div>
+  <div class="row"><label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:500"><input type="checkbox" id="wzTyping" checked> Show typing first</label><div class="spacer"></div><button class="btn ai" id="wzSend">Send as Rota</button></div>
+  <div><label>Trigger a disruption on screen</label><div class="row" id="wzTriggers"></div></div>
+  <div><label>Jump to step</label><div class="row" id="wzJump"></div></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(() => {
+"use strict";
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+function h(tag, attrs, ...kids){
+  const el = document.createElement(tag);
+  if (attrs) for (const [k,v] of Object.entries(attrs)){
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "html") el.innerHTML = v; // only used with static strings written in this file
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) el.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return el;
+}
+const toMin = t => { const [a,b] = t.split(":").map(Number); return a*60+b; };
+const toHM = m => String(Math.floor(m/60)%24).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
+let toastTimer;
+function toast(t){ const el=$("#toast"); el.textContent=t; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,2600); }
+async function copy(text, btn){
+  try { await navigator.clipboard.writeText(text); toast("Copied"); }
+  catch { const ta=h("textarea",{style:"position:fixed;opacity:0"}); ta.value=text; document.body.append(ta); ta.select(); try{document.execCommand("copy"); toast("Copied");}catch{toast("Select the text and copy it");} ta.remove(); }
+}
+const gsearch = q => "https://www.google.com/search?q=" + encodeURIComponent(q);
+const gmap = q => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q + ", Rio de Janeiro");
+
+// ---------- content ----------
+const STEPS = [
+ {id:"brief", name:"Brief", core:"Understand what the traveler wants",
+  ai:"Asks three follow-up questions (must-sees, early starts, rain preference) and writes back a summary of the brief.",
+  you:"Fills in the brief, answers the questions, corrects the summary and confirms it.",
+  data:"Only what the traveler types: dates, people, budget, interests, pace and limits.",
+  sim:"Follow-up questions are pre-written in scripted mode; written by Claude in live AI mode."},
+ {id:"propose", name:"Propose", core:"Propose a route and places",
+  ai:"Drafts three different itineraries and explains why each one fits this brief.",
+  you:"Picks one option (or goes back and changes the brief).",
+  data:"The confirmed brief and the model's general knowledge of Rio.",
+  sim:"Scripted mode shows sample itineraries written for the example traveler (and says so if you changed the brief). Live AI mode writes three new ones from your brief."},
+ {id:"check", name:"Check", core:"Handle logistics: verify",
+  ai:"Lists every assumption in the plan (hours, prices, days a place runs) with how sure it is.",
+  you:"Checks each flagged item on an official source and marks it verified.",
+  data:"The chosen plan. The search links open in the traveler's own browser.",
+  sim:"Confidence levels are pre-set. Links are real searches."},
+ {id:"book", name:"Book", core:"Handle logistics: book",
+  ai:"Builds the booking checklist, drafts reservation messages in Portuguese and a calendar file.",
+  you:"Books and pays on the official sites, sends the messages, ticks what is done.",
+  data:"The plan plus the traveler's name and party size.",
+  sim:"Nothing is booked or paid. The calendar file and copied messages are real."},
+ {id:"travel", name:"Travel", core:"Adapt when things change: during the trip",
+  ai:"Shows today's plan, what is next and how long until it starts.",
+  you:"Follows the plan, skips a stop or reports that something changed.",
+  data:"Today's plan and the phone's clock.",
+  sim:"\"Now\" is fixed at 12:40 on Saturday 14 Nov for the demo."},
+ {id:"adapt", name:"Adapt", core:"Adapt when things change",
+  ai:"Proposes a new version of the day, with its reason, its assumptions and what it cannot know.",
+  you:"Approves, rejects or asks for another option. Nothing changes without approval.",
+  data:"What the traveler reports plus today's plan. No live weather, queues or closures.",
+  sim:"Quick disruptions use rules written for the demo; \"Describe what changed\" uses live AI or the Wizard."},
+ {id:"remember", name:"Remember", core:"Keep memories",
+  ai:"Turns the traveler's own notes into a short trip story.",
+  you:"Chooses which paragraphs to keep and whether to share the story.",
+  data:"Only the notes the traveler writes.",
+  sim:"The story is pre-written in scripted mode; written by Claude in live AI mode."}
+];
+
+const DAYS = [
+  {key:"d1", label:"Fri 13 Nov", date:"20261113"},
+  {key:"d2", label:"Sat 14 Nov", date:"20261114"},
+  {key:"d3", label:"Sun 15 Nov", date:"20261115"}
+];
+// conf: known | check | unsure ; outdoor, fixed (time tied to nature), book (needs ticket/reservation)
+const B = (id,time,title,area,kind,est,conf,verify,extra={}) => ({id,time,title,area,kind,est,conf,verify,...extra});
+const OPTIONS = [
+ {id:"postcard", name:"Postcard Rio", line:"The famous views, one per half-day.",
+  stops:"4 a day", walk:"Medium", spend:"≈ R$ 1,650 for two",
+  why:["Both must-sees you named, on clear mornings","Train to the Christ instead of the trail (Leo's knee)","Leaves little room for food stops"],
+  days:{
+   d1:[B("p11","09:00","Escadaria Selarón","Lapa","see","Free","known","Best before crowds; go in daylight",{outdoor:1}),
+       B("p12","11:00","Museu do Amanhã","Praça Mauá","see","≈ R$ 30 pp","check","Opening days and ticket price"),
+       B("p13","13:30","Lunch at Confeitaria Colombo","Centro","eat","≈ R$ 90 pp","check","Lunch hours"),
+       B("p14","17:00","Sunset at Mureta da Urca","Urca","see","≈ R$ 40 pp","known","Sunset time",{outdoor:1,fixed:1})],
+   d2:[B("p21","08:00","Christ the Redeemer by Trem do Corcovado","Cosme Velho","see","≈ R$ 100+ pp","check","Timed ticket; summit may be in cloud",{outdoor:1,book:1}),
+       B("p22","12:00","Lunch in Botafogo","Botafogo","eat","≈ R$ 70 pp","unsure","Rota did not pick a specific place"),
+       B("p23","14:30","Copacabana promenade","Copacabana","see","Free","known","",{outdoor:1}),
+       B("p24","17:30","Sunset at Arpoador","Arpoador","see","Free","known","Sunset time",{outdoor:1,fixed:1}),
+       B("p25","20:30","Dinner in Ipanema","Ipanema","eat","≈ R$ 150 pp","check","Reservation needed",{book:1})],
+   d3:[B("p31","09:00","Jardim Botânico","Jardim Botânico","see","≈ R$ 70 pp","check","Holiday hours (15 Nov)",{outdoor:1}),
+       B("p32","12:30","Lunch in Leblon","Leblon","eat","≈ R$ 90 pp","unsure","Rota did not pick a specific place"),
+       B("p33","15:30","Sugarloaf cable car","Urca","see","≈ R$ 200 pp","check","Ticket price and last car",{outdoor:1,book:1}),
+       B("p34","19:30","Dinner in Urca","Urca","eat","≈ R$ 120 pp","unsure","")]}},
+ {id:"local", name:"Rio like a local", line:"Neighborhoods, food and one big view a day.",
+  stops:"5–6 a day", walk:"Medium, no steep trails", spend:"≈ R$ 1,750 for two",
+  why:["Matches food + art & design, your top interests","Train to the Christ instead of the trail (Leo's knee)","Sunday market and the 15 Nov holiday built in","Fits the R$ 1,800 budget with a small margin"],
+  days:{
+   d1:[B("l11","09:30","Breakfast at Confeitaria Colombo","Centro","eat","≈ R$ 70 pp","known","Opening time"),
+       B("l12","11:00","Real Gabinete Português de Leitura","Centro","see","Free","check","Opening days and hours"),
+       B("l13","13:00","Lunch: a prato feito near Praça XV","Centro","eat","≈ R$ 45 pp","unsure","Rota will not invent a name: pick one on the map"),
+       B("l14","14:30","MAR museum + Olympic Boulevard murals","Praça Mauá","see","≈ R$ 20 pp","check","Ticket price; free day"),
+       B("l15","17:30","Escadaria Selarón at golden hour","Lapa","see","Free","known","Go before dark",{outdoor:1,fixed:1}),
+       B("l16","20:00","Samba at Pedra do Sal","Saúde","night","Drinks only","unsure","Which nights it runs changes: check the organizers' page",{outdoor:1})],
+   d2:[B("l21","08:00","Christ the Redeemer by Trem do Corcovado","Cosme Velho","see","≈ R$ 100+ pp","check","Timed ticket; summit may be in cloud",{outdoor:1,book:1}),
+       B("l22","11:30","Santa Teresa walk + bonde tram","Santa Teresa","see","≈ R$ 20 pp","check","Tram timetable",{outdoor:1}),
+       B("l23","13:00","Saturday feijoada at Bar do Mineiro","Santa Teresa","eat","≈ R$ 90 pp","check","Queue on Saturdays; reservations?"),
+       B("l24","15:30","Parque Lage gardens + café","Jardim Botânico","see","Free","known","",{outdoor:1}),
+       B("l25","17:30","Sunset at Arpoador","Arpoador","see","Free","known","Sunset time",{outdoor:1,fixed:1}),
+       B("l26","20:30","Dinner in Ipanema","Ipanema","eat","≈ R$ 150 pp","check","Reservation needed",{book:1})],
+   d3:[B("l31","09:00","Jardim Botânico","Jardim Botânico","see","≈ R$ 70 pp","check","Holiday hours (15 Nov)",{outdoor:1}),
+       B("l32","11:30","Feira Hippie de Ipanema (Sundays)","Ipanema","see","Free","check","Runs on the holiday?",{outdoor:1}),
+       B("l33","13:30","Lunch at a beach kiosk","Ipanema","eat","≈ R$ 80 pp","known","",{outdoor:1}),
+       B("l34","15:30","Sugarloaf cable car","Urca","see","≈ R$ 200 pp","check","Ticket price and last car",{outdoor:1,book:1}),
+       B("l35","18:30","Drinks at Mureta da Urca","Urca","night","≈ R$ 50 pp","known","",{outdoor:1})]}},
+ {id:"slow", name:"Slow Rio", line:"Two things a day, long lunches, beach time.",
+  stops:"3 a day", walk:"Low", spend:"≈ R$ 1,300 for two",
+  why:["Easiest on Leo's knee","Lowest spend, most free time","Skips Sugarloaf, one of your must-sees"],
+  days:{
+   d1:[B("s11","10:00","Santa Teresa morning","Santa Teresa","see","≈ R$ 20 pp","check","Tram timetable",{outdoor:1}),
+       B("s12","13:00","Long lunch in Santa Teresa","Santa Teresa","eat","≈ R$ 90 pp","unsure",""),
+       B("s13","17:30","Sunset at Arpoador","Arpoador","see","Free","known","Sunset time",{outdoor:1,fixed:1})],
+   d2:[B("s21","08:00","Christ the Redeemer by Trem do Corcovado","Cosme Velho","see","≈ R$ 100+ pp","check","Timed ticket",{outdoor:1,book:1}),
+       B("s22","13:00","Lunch in Jardim Botânico","Jardim Botânico","eat","≈ R$ 80 pp","unsure",""),
+       B("s23","16:00","Ipanema beach","Ipanema","rest","Free","known","",{outdoor:1})],
+   d3:[B("s31","10:00","Feira Hippie de Ipanema","Ipanema","see","Free","check","Runs on the holiday?",{outdoor:1}),
+       B("s32","13:00","Lunch at a beach kiosk","Ipanema","eat","≈ R$ 80 pp","known","",{outdoor:1}),
+       B("s33","16:00","Leblon beach and dinner","Leblon","rest","≈ R$ 120 pp","unsure","",{outdoor:1})]}}
+];
+const INDOOR = [
+  {title:"Instituto Moreira Salles (exhibitions + café)", area:"Gávea", kind:"see", est:"Free", conf:"check", verify:"Saturday hours and current exhibition"},
+  {title:"Livraria da Travessa bookshop + coffee", area:"Ipanema", kind:"rest", est:"≈ R$ 30 pp", conf:"check", verify:"Opening hours"},
+  {title:"CCBB Rio cultural center", area:"Centro", kind:"see", est:"Free", conf:"check", verify:"What is on and hours"},
+  {title:"Museu do Amanhã", area:"Praça Mauá", kind:"see", est:"≈ R$ 30 pp", conf:"check", verify:"Opening days and ticket price"}
+];
+const EAT_ALT = {"Santa Teresa":{title:"Lunch at Café do Alto", area:"Santa Teresa", est:"≈ R$ 70 pp"}};
+
+const SAMPLE_BRIEF = {name:"Ana Souza", dest:"Rio de Janeiro", dates:"Fri 13 – Sun 15 Nov 2026", people:"2 adults (Ana and Leo)", budget:"R$ 1,800 for two (food + activities)",
+  interests:["Food","Art & design","Viewpoints"], pace:"Balanced", limits:"Leo has a bad knee: no long or steep hikes."};
+const INTERESTS = ["Food","Art & design","Viewpoints","Beaches","Nightlife","History","Nature","Shopping"];
+const FOLLOWUPS = [
+  {q:"Any place you would be sad to miss?", opts:["Christ + Sugarloaf","Just the Christ","No must-sees"]},
+  {q:"How do you feel about early starts? The Christ is clearest before 9am.", opts:["Fine before 8am","Not before 9am"]},
+  {q:"If it rains, what would you rather do?", opts:["Museums","Cafés & food","Shopping"]}
+];
+const SAMPLE_NOTES = "Sat: Christ was cloudy at first, then it opened up for ten minutes. Feijoada at Bar do Mineiro, best meal of the trip.\nSat afternoon: rain, swapped the park for IMS. Great exhibition, coffee in the garden.\nSun: holiday crowds at the Feira Hippie, bought a print of the Selarón steps. Sunset drinks at Mureta da Urca with Leo.";
+const SCRIPTED_STORY = {title:"Three days of Rio, rain included",
+  paras:["We started in the old center, with coffee under the mirrors of Confeitaria Colombo and an hour among the books of the Real Gabinete. By golden hour we were on the Selarón steps, and the night ended in samba at Pedra do Sal.",
+         "Saturday began in the clouds. The Christ hid for most of the morning, then opened up for ten minutes, and that was enough. The feijoada at Bar do Mineiro was the best meal of the trip.",
+         "When the rain came in the afternoon we changed plans and found Instituto Moreira Salles instead: a great exhibition and coffee in the garden while it poured.",
+         "Sunday was a holiday, so the Feira Hippie was packed. We came home with a print of the Selarón steps, and said goodbye to Rio with drinks on the Mureta da Urca at sunset."]};
+
+// ---------- state ----------
+const fresh = () => ({
+  step:"brief", done:{}, brief:structuredClone(SAMPLE_BRIEF), briefSent:false, answers:{}, followups:FOLLOWUPS, briefOk:false,
+  option:"local", optionOk:false, plan:null, verified:{}, booked:{}, day:"d2",
+  feeds:{brief:[],propose:[],check:[],book:[],travel:[],adapt:[],remember:[]},
+  proposal:null, lastDiff:null, log:[], pending:null, notes:SAMPLE_NOTES, story:null, keep:{},
+  liveOptions:null, optsFor:null, drafting:false
+});
+let S = fresh();
+let typingStep = null;
+let sample = null, live = false;
+const NOW = "12:40";
+
+const getOptions = () => S.liveOptions || OPTIONS;
+function planFor(optId){ const o = getOptions().find(x=>x.id===optId) || getOptions()[0]; return structuredClone(o.days); }
+// which parts of the brief differ from the example traveler the sample itineraries were written for
+function briefChanges(){
+  const b=S.brief, a=SAMPLE_BRIEF, out=[]; const norm=v=>String(v||"").trim().toLowerCase();
+  if (norm(b.limits)!==norm(a.limits)) out.push("limits");
+  if (norm(b.dest)!==norm(a.dest)) out.push("destination");
+  if (norm(b.dates)!==norm(a.dates)) out.push("dates");
+  if (norm(b.people)!==norm(a.people)) out.push("who is going");
+  if (norm(b.budget)!==norm(a.budget)) out.push("budget");
+  if (b.pace!==a.pace) out.push("pace");
+  if ([...b.interests].sort().join()!==[...a.interests].sort().join()) out.push("interests");
+  return out;
+}
+function allBlocks(){ return S.plan ? DAYS.flatMap(d => S.plan[d.key].map(b => ({...b, day:d}))) : []; }
+
+// ---------- feed ----------
+function say(step, who, text){ S.feeds[step].push({who,text}); if (S.step===step) render(); }
+function rotaSays(step, text, delay=900){
+  typingStep = step; if (S.step===step) render();
+  setTimeout(()=>{ typingStep=null; say(step,"rota",text); }, delay);
+}
+function feedView(step){
+  const f = h("div",{class:"feed"});
+  for (const m of S.feeds[step]) f.append(h("div",{class:"msg "+(m.who==="you"?"you":"rota")}, m.text));
+  if (typingStep===step) f.append(h("div",{class:"typing","aria-label":"Rota is typing"},h("i"),h("i"),h("i")));
+  return f;
+}
+
+// ---------- chrome ----------
+function go(id){ S.step=id; render(); window.scrollTo({top:0,behavior:"smooth"}); }
+function renderStepper(){
+  const nav = $("#stepper"); nav.replaceChildren();
+  STEPS.forEach((s,i)=> nav.append(h("button",{class:"step"+(S.step===s.id?" on":"")+(S.done[s.id]?" done":""), "aria-current":S.step===s.id?"step":null, onclick:()=>go(s.id)}, h("b",null,"0"+(i+1)), h("span",null,s.name))));
+}
+function renderBts(){
+  const s = STEPS.find(x=>x.id===S.step);
+  $("#bts").replaceChildren(
+    h("div",{class:"card"},
+      h("p",{class:"rule"},h("em",null,"Rota proposes."),h("br"),h("strong",null,"You decide."))),
+    h("div",{class:"card"},
+      h("dl",{style:"margin:0"},
+        h("dt",null,"Core function"), h("dd",null,h("b",null,s.core)),
+        h("dt",null,"What the AI does"), h("dd",{class:"who-ai"},s.ai),
+        h("dt",null,"What a person decides"), h("dd",{class:"who-you"},s.you),
+        h("dt",null,"Data it uses"), h("dd",null,s.data),
+        h("dt",null,"In this prototype"), h("dd",{class:"small"},s.sim))),
+    S.log.length ? h("div",{class:"card"}, h("h3",null,"Decisions log"), h("ul",{class:"why",style:"margin-top:6px"}, S.log.slice(-6).map(l=>h("li",null,l)))) : ""
+  );
+}
+function render(){
+  renderStepper(); renderBts();
+  const fn = {brief:vBrief, propose:vPropose, check:vCheck, book:vBook, travel:vTravel, adapt:vAdapt, remember:vRemember}[S.step];
+  $("#app").replaceChildren(...fn().filter(Boolean));
+  renderWizard();
+}
+function header(n, title, lede){ return h("div",null, h("p",{class:"small",style:"font-family:var(--mono)"},"Step "+n+" of 7"), h("h1",null,title), lede?h("p",{class:"lede",style:"margin-top:6px"},lede):null); }
+function nextBtn(label, to, disabled){ return h("button",{class:"btn you",disabled:disabled||null,onclick:()=>{S.done[S.step]=true; go(to);}},label); }
+
+// ---------- 1 brief ----------
+function vBrief(){
+  const b = S.brief;
+  const fld = (id,lab,key) => h("div",null,h("label",{for:id},lab),h("input",{type:"text",id,value:b[key],oninput:e=>b[key]=e.target.value}));
+  const form = h("div",{class:"card"},
+    h("div",{class:"row",style:"margin-bottom:10px"},h("span",{class:"tag you"},"You write"),h("span",{class:"small"},"Example traveler, filled in for the demo. Change anything.")),
+    h("div",{class:"grid2"}, fld("fDest","Where","dest"), fld("fDates","When","dates"), fld("fPeople","Who is going","people"), fld("fBudget","Budget","budget"), fld("fName","Name for bookings","name"),
+      h("div",null,h("label",{for:"fPace"},"Pace"),h("select",{id:"fPace",onchange:e=>b.pace=e.target.value},["Relaxed","Balanced","Packed"].map(p=>h("option",{selected:b.pace===p||null},p))))),
+    h("div",{style:"margin-top:12px"},h("label",null,"Interests"),h("div",{class:"row"},INTERESTS.map(t=>h("button",{class:"chip"+(b.interests.includes(t)?" on":""),"aria-pressed":String(b.interests.includes(t)),onclick:()=>{const i=b.interests.indexOf(t); i<0?b.interests.push(t):b.interests.splice(i,1); render();}},t)))),
+    h("div",{style:"margin-top:12px"},h("label",{for:"fLimits"},"Anything Rota must respect? (health, mobility, safety, diet)"),h("textarea",{id:"fLimits",oninput:e=>b.limits=e.target.value},b.limits)),
+    h("div",{class:"row",style:"margin-top:12px"},h("button",{class:"btn ai",onclick:sendBrief},S.briefSent?"Send the changes to Rota":"Send to Rota"))
+  );
+  const qa = S.briefSent ? h("div",{class:"card ai-made"},
+    h("div",{class:"row",style:"margin-bottom:8px"},h("span",{class:"tag ai"},"Rota asks"),h("span",{class:"tag you"},"You answer")),
+    S.followups.map((f,i)=>h("div",{style:"margin-top:10px"},h("p",{style:"font-weight:600"},f.q),h("div",{class:"row",style:"margin-top:6px"},f.opts.map(o=>h("button",{class:"chip"+(S.answers[i]===o?" on":""),onclick:()=>{S.answers[i]=o; if(Object.keys(S.answers).length===S.followups.length && !S.briefOk) summarize(); render();}},o)))))) : null;
+  const ready = S.briefSent && Object.keys(S.answers).length===S.followups.length;
+  return [header(1,"Tell Rota about the trip","Rota starts by understanding the person, not the destination. It asks only what it needs to plan, and it says back what it understood so you can correct it."),
+    form, feedView("brief"), qa,
+    h("div",{class:"row"}, h("button",{class:"btn you",disabled:!ready||null,onclick:()=>{S.done.brief=true; go("propose"); if (live) draftOptions();}},"Confirm the brief"), ready?null:h("span",{class:"small"},"Answer Rota's questions to continue."))];
+}
+async function sendBrief(){
+  S.briefSent = true; S.answers = {}; S.feeds.brief = [];
+  say("brief","you","Here's my trip: "+S.brief.dest+", "+S.brief.dates+", "+S.brief.people+". Budget "+S.brief.budget+". Pace: "+S.brief.pace+".");
+  if (live){
+    typingStep="brief"; render();
+    try{
+      const res = await sample.json(
+        "You are Rota, a 2026 trip-planning assistant. A traveler gave this brief:\n"+JSON.stringify(S.brief)+
+        "\nAsk exactly 3 short follow-up questions that would most change the itinerary. Each has 2-3 short answer options (max 4 words each)."+
+        " Reply with only JSON: [{\"q\":\"...\",\"opts\":[\"...\",\"...\"]}]", {modelTier:"quick"});
+      if (Array.isArray(res) && res.length) S.followups = res.slice(0,3).map(x=>({q:String(x.q), opts:(x.opts||[]).slice(0,3).map(String)}));
+    }catch(e){ S.followups = FOLLOWUPS; toast("Live AI unavailable, using the scripted questions"); }
+    typingStep=null; say("brief","rota","Thanks! Three quick questions so I don't guess."); return;
+  }
+  S.followups = FOLLOWUPS;
+  rotaSays("brief","Thanks! Three quick questions so I don't guess.");
+}
+function summarize(){
+  S.briefOk = true;
+  const b=S.brief;
+  rotaSays("brief","Here's what I understood:\n• "+b.dates+" in "+b.dest+", "+b.people+"\n• "+b.budget+", "+b.pace.toLowerCase()+" pace\n• Most interested in: "+b.interests.join(", ")+"\n• Must respect: "+(b.limits||"nothing special")+"\n• If it rains: "+(S.answers[2]||"—")+"\nI can't see live prices or weather. I'll mark what you should check. Is this right?", 1100);
+}
+
+// ---------- 2 propose ----------
+function limitNote(){
+  const lim = (S.brief.limits||"").trim() || "no special limits";
+  if (S.drafting) return h("div",{class:"card ai-made"},h("div",{class:"row"},h("span",{class:"tag ai"},"Live AI"),h("b",null,"Rota is drafting three itineraries for your brief…")),h("p",{class:"small",style:"margin-top:6px"},"This can take up to a minute. It must respect: “"+lim+"”."));
+  if (S.liveOptions) return h("div",{class:"card ai-made"},h("div",{class:"row"},h("span",{class:"tag ai"},"Written by live AI"),h("span",null,"for your brief, respecting: “"+(S.optsFor||lim)+"”.")),h("p",{class:"small",style:"margin-top:6px"},"New places can be wrong or out of date. Step 3 lists what to check."));
+  const changed = briefChanges();
+  if (!changed.length) return h("p",{class:"small"},h("span",{class:"tag plain"},"Sample itineraries")," Written for the example traveler, respecting: “"+SAMPLE_BRIEF.limits+"”");
+  return h("div",{class:"banner"},h("b",null,"Scripted demo"),
+    h("div",{style:"display:flex;flex-direction:column;gap:6px;min-width:0"},
+      h("span",null,"These sample itineraries were written for the example traveler (“"+SAMPLE_BRIEF.limits+"”), not for your "+changed.join(", ")+". With live AI, Rota rewrites them so every stop respects: “"+lim+"”."),
+      sample ? h("div",null,h("button",{class:"btn ai",onclick:()=>{ if(!live) $("#liveBtn").click(); draftOptions(); }},"Rewrite them with live AI")) : h("span",{class:"small"},"Live AI isn't available in this view (it runs on claude.ai). A teammate can explain the change as the Wizard.")));
+}
+async function draftOptions(){
+  if (!sample || S.drafting) return;
+  S.drafting = true; S.feeds.propose = []; typingStep = "propose"; if (S.step==="propose") render();
+  const lim = (S.brief.limits||"").trim() || "no special limits";
+  const qa = S.followups.map((f,i)=>f.q+" → "+(S.answers[i]||"no answer")).join("; ");
+  try{
+    const res = await sample.json(
+      "You are Rota, a 2026 trip-planning assistant. You cannot see live prices, opening hours or weather, and you never book or pay.\n"+
+      "Traveler brief: "+JSON.stringify(S.brief)+"\nAnswers to follow-up questions: "+qa+"\n"+
+      "Plan three days with keys d1 (Fri 13 Nov 2026), d2 (Sat 14 Nov 2026) and d3 (Sun 15 Nov 2026, a national holiday in Brazil). Use the destination in the brief.\n"+
+      "Draft exactly 3 itineraries that are really different from each other. Every item must respect the traveler's limits (\""+lim+"\"); say how in 'why'. "+
+      "Use real, well-known places only. For small restaurants or cafés do not invent names: write e.g. 'Lunch: pick a place near X' with conf 'unsure'. "+
+      "4 to 6 items per day, times as HH:MM. Mark anything that changes often (hours, prices, days it runs) with conf 'check' and a short verify note. Prices are rough estimates.\n"+
+      "Reply with only JSON: [{\"name\":\"2-3 words\",\"line\":\"one sentence\",\"stops\":\"e.g. 5 a day\",\"walk\":\"Low, Medium or High\",\"spend\":\"estimate for the group\",\"why\":[\"up to 4 short bullets tied to the brief, including the limits\"],"+
+      "\"days\":{\"d1\":[{\"time\":\"09:00\",\"title\":\"...\",\"area\":\"neighborhood\",\"kind\":\"see|eat|rest|night\",\"est\":\"≈ R$ 50 pp\",\"conf\":\"known|check|unsure\",\"verify\":\"what to check, or empty\",\"outdoor\":true,\"fixed\":false,\"book\":false}],\"d2\":[],\"d3\":[]}}]",
+      {modelTier:"default"});
+    const opts = normalizeOptions(res);
+    if (!opts.length) throw {code:"empty"};
+    S.liveOptions = opts; S.optsFor = lim; S.option = opts[0].id;
+    typingStep = null; S.drafting = false; S.log.push("Live AI drafted itineraries for: "+lim);
+    say("propose","rota","Here are three options written for your brief. Every stop should respect: “"+lim+"”. I can't see live hours or prices, so step 3 lists what to check.");
+  }catch(e){
+    typingStep = null; S.drafting = false;
+    toast("Live AI unavailable, showing the sample itineraries");
+    say("propose","rota","I couldn't draft new options just now, so these are the sample ones. They were written for the example traveler, not for your limits.");
+  }
+}
+function normalizeOptions(res){
+  const list = Array.isArray(res) ? res : (res && Array.isArray(res.options) ? res.options : []);
+  const KINDS = ["see","eat","rest","night"], CONF = ["known","check","unsure"];
+  const hhmm = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t||"").trim()); return m && +m[1] < 24 && +m[2] < 60 ? m[1].padStart(2,"0")+":"+m[2] : null; };
+  return list.slice(0,3).map((o,i)=>{
+    const id = "ai"+i, days = {};
+    DAYS.forEach((d,j)=>{
+      const raw = (o && o.days && (o.days[d.key] || o.days[j])) || [];
+      days[d.key] = (Array.isArray(raw) ? raw : []).slice(0,7).map((b,k)=>({
+        id:id+d.key+"_"+k, time:hhmm(b&&b.time)||toHM(540+k*120), title:String((b&&b.title)||"Stop"), area:String((b&&b.area)||""),
+        kind:KINDS.includes(b&&b.kind)?b.kind:"see", est:String((b&&b.est)||"Check"), conf:CONF.includes(b&&b.conf)?b.conf:"check",
+        verify:String((b&&b.verify)||""), outdoor:!!(b&&b.outdoor), fixed:!!(b&&b.fixed), book:!!(b&&b.book)
+      })).sort((a,b)=>toMin(a.time)-toMin(b.time));
+    });
+    return {id, name:String((o&&o.name)||"Option "+(i+1)), line:String((o&&o.line)||""), stops:String((o&&o.stops)||"—"), walk:String((o&&o.walk)||"—"),
+      spend:String((o&&o.spend)||"—"), why:((o&&o.why)||[]).map(String).slice(0,4), days};
+  }).filter(o=>DAYS.every(d=>o.days[d.key].length));
+}
+function vPropose(){
+  const OPTS = getOptions();
+  const o = OPTS.find(x=>x.id===S.option) || OPTS[0];
+  if (S.drafting) return [header(2,"Three ways to do this trip","Rota drafts options that are really different, so choosing means something. Each one says why it fits your brief and what it gives up."), limitNote(), feedView("propose")];
+  const cards = h("div",{class:"grid3"}, OPTS.map(op=>h("button",{class:"card optcard ai-made"+(S.option===op.id?" on":""),"aria-pressed":String(S.option===op.id),onclick:()=>{S.option=op.id; render();}},
+     h("div",{class:"row"},h("span",{class:"tag ai"},"Rota drafted"),S.option===op.id?h("span",{class:"tag you"},"Your pick"):null),
+     h("h2",null,op.name), h("p",{class:"small"},op.line),
+     h("div",{class:"stat"},h("span",null,"Stops ",h("b",null,op.stops)),h("span",null,"Walking ",h("b",null,op.walk))),
+     h("div",{class:"stat"},h("span",null,"Estimate ",h("b",null,op.spend))),
+     h("div",null,h("p",{style:"font-weight:700;font-size:13px"},"Why it fits you"),h("ul",{class:"why"},op.why.map(w=>h("li",null,w))))
+  )));
+  const preview = h("div",{class:"card"}, h("div",{class:"row"},h("h2",null,o.name+", day by day"),h("span",{class:"tag plain"},"Estimates, not quotes")),
+    h("div",{class:"grid3",style:"margin-top:10px"}, DAYS.map(d=>h("div",null,h("h3",null,d.label),h("div",{class:"tl"},o.days[d.key].map(b=>h("div",{class:"blk",style:"grid-template-columns:52px minmax(0,1fr)"},h("span",{class:"t"},b.time),h("div",null,h("div",{class:"ttl",style:"font-size:14px"},b.title),h("div",{class:"meta"},b.area)))))))));
+  return [header(2,"Three ways to do this trip","Rota drafts options that are really different, so choosing means something. Each one says why it fits your brief and what it gives up."),
+    limitNote(), feedView("propose"), cards, preview,
+    h("div",{class:"row"}, h("button",{class:"btn you",onclick:()=>{S.option=o.id; S.plan=planFor(S.option); S.optionOk=true; S.done.propose=true; S.verified={}; S.booked={}; S.log.push("Chose “"+o.name+"”"); go("check");}},"Use “"+o.name+"”"),
+      h("button",{class:"btn ghost",onclick:()=>go("brief")},"Change the brief"))];
+}
+
+// ---------- 3 check ----------
+function vCheck(){
+  if (!S.plan) S.plan = planFor(S.option);
+  const items = allBlocks().filter(b=>b.conf!=="known" || b.verify);
+  const n = items.filter(b=>S.verified[b.id]).length;
+  const confTag = c => c==="known"?h("span",{class:"tag ok conf"},"Usually stable"):c==="check"?h("span",{class:"tag warn conf"},"Check"):h("span",{class:"tag bad conf"},"Rota is unsure");
+  return [header(3,"Check before you trust it","Rota knows a lot about Rio, but not what changed last week. It shows every assumption in the plan and how sure it is. You check the risky ones on official sources."),
+    h("div",{class:"banner"},h("b",null,"Heads-up"),h("span",null,"Sun 15 Nov is a national holiday in Brazil (Proclamação da República). Expect crowds and holiday opening hours. ",h("span",{class:"tag ai"},"Rota flagged"))),
+    h("div",{class:"card"},
+      h("div",{class:"row"},h("h2",null,n+" of "+items.length+" checked"),h("div",{class:"spacer"}),h("span",{class:"small"},"You can continue with unchecked items; they stay flagged.")),
+      h("div",{class:"prog",style:"margin-top:8px"},h("i",{style:"width:"+(items.length?Math.round(100*n/items.length):0)+"%"}))),
+    h("div",{class:"card"}, items.map(b=>h("div",{class:"check"},
+      h("input",{type:"checkbox",id:"v_"+b.id,checked:S.verified[b.id]||null,onchange:e=>{S.verified[b.id]=e.target.checked; render();}, "aria-label":"I checked "+b.title}),
+      h("div",{style:"min-width:0"},h("label",{for:"v_"+b.id,style:"font-size:15px;margin:0"},b.title),
+        h("div",{class:"small"},b.day.label+" · "+b.time+" · "+b.area+" · "+b.est),
+        b.verify?h("div",{class:"small"},h("span",{class:"tag ai"},"Rota assumed")," "+b.verify):null,
+        h("div",{class:"row",style:"margin-top:4px;font-size:13px"},h("a",{href:gsearch(b.title+" Rio horário oficial"),target:"_blank",rel:"noopener"},"Search official info"),h("a",{href:gmap(b.title.replace(/^(Lunch|Dinner|Breakfast)( at|:)? /,"")),target:"_blank",rel:"noopener"},"Open in Maps"))),
+      h("div",null, S.verified[b.id]?h("span",{class:"tag you"},"You checked"):confTag(b.conf))))),
+    feedView("check"),
+    h("div",{class:"row"}, nextBtn("Go to bookings","book"))];
+}
+
+// ---------- 4 book ----------
+function draftFor(b){
+  const first = (S.brief.name||"").split(" ")[0] || "Ana";
+  const d = b.day.label.split(" ");
+  const ddmm = d[1].padStart(2,"0")+"/11";
+  if (b.kind==="eat") return "Olá! Gostaria de reservar uma mesa para 2 pessoas no dia "+ddmm+", às "+b.time.replace(":","h")+", em nome de "+(S.brief.name||first)+". Vocês têm disponibilidade? Obrigada!\n\n(Hi! I'd like to book a table for 2 on "+b.day.label+" at "+b.time+", under "+(S.brief.name||first)+". Do you have availability? Thank you!)";
+  return "Buy the timed ticket on the official site only. Choose "+b.day.label+", "+b.time+", 2 adults. Save the QR code offline.";
+}
+function vBook(){
+  if (!S.plan) S.plan = planFor(S.option);
+  const items = allBlocks().filter(b=>b.book);
+  return [header(4,"Book it yourself, with everything ready","Rota prepares the checklist, the messages and the calendar. It never pays, never books and never sends a message for you."),
+    h("div",{class:"banner"},h("b",null,"Rota can't pay or book."),h("span",null,"Use the official sites. Ticking “I booked it” is your own record; nothing is sent anywhere.")),
+    h("div",{class:"card"}, items.map(b=>h("div",{class:"check"},
+      h("input",{type:"checkbox",id:"b_"+b.id,checked:S.booked[b.id]||null,onchange:e=>{S.booked[b.id]=e.target.checked; if(e.target.checked) S.log.push("Booked: "+b.title); render();}}),
+      h("div",{style:"min-width:0"},h("label",{for:"b_"+b.id,style:"font-size:15px;margin:0"},b.title),h("div",{class:"small"},b.day.label+" · "+b.time+" · "+b.est),
+        h("pre",{class:"draft"},draftFor(b)),
+        h("div",{class:"row",style:"margin-top:6px"},h("button",{class:"btn ghost",onclick:e=>copy(draftFor(b),e.target)},b.kind==="eat"?"Copy WhatsApp message":"Copy steps"),h("a",{href:gsearch(b.title+" site oficial ingressos"),target:"_blank",rel:"noopener",style:"font-size:13px"},"Find the official site"))),
+      h("div",null,S.booked[b.id]?h("span",{class:"tag you"},"You booked"):h("span",{class:"tag ai"},"Rota drafted"))))),
+    h("div",{class:"card"}, h("div",{class:"row"},h("div",{style:"min-width:0;flex:1"},h("h3",null,"Add the whole trip to your calendar"),h("p",{class:"small"},"A real .ics file with every stop, made from your plan.")),h("button",{class:"btn ai",onclick:saveIcs},"Save calendar file"))),
+    h("div",{class:"row"}, nextBtn("Start the trip","travel"))];
+}
+function ics(){
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Rota prototype//EN"];
+  for (const d of DAYS){ const bl=S.plan[d.key]; bl.forEach((b,i)=>{ const st=toMin(b.time), en=i+1<bl.length?Math.min(toMin(bl[i+1].time),st+150):st+120;
+    L.push("BEGIN:VEVENT","UID:"+b.id+"-"+d.date+"@rota.demo","DTSTAMP:20261022T120000Z","DTSTART;TZID=America/Sao_Paulo:"+d.date+"T"+b.time.replace(":","")+"00","DTEND;TZID=America/Sao_Paulo:"+d.date+"T"+toHM(en).replace(":","")+"00","SUMMARY:"+b.title.replace(/[,;]/g," "),"LOCATION:"+b.area+" Rio de Janeiro","DESCRIPTION:"+(b.verify?"Check: "+b.verify.replace(/[,;]/g," "):"From Rota"),"END:VEVENT"); }); }
+  L.push("END:VCALENDAR"); return L.join("\r\n");
+}
+async function saveIcs(){
+  let dl=null; try{ dl = window.claude ? await window.claude.use("downloads") : null; }catch{}
+  if (dl){ try{ await dl.save({filename:"rota-rio-trip.ics", data:ics()}); toast("Calendar file ready"); return; }catch(e){ if(e&&e.code==="cancelled") return; } }
+  copy(ics()); toast("Calendar text copied (downloads unavailable here)");
+}
+
+// ---------- 5 travel ----------
+function timeline(blocks, opts={}){
+  const tl = h("div",{class:"tl"}); let drew=false;
+  blocks.forEach((b,i)=>{
+    const st=toMin(b.time), nx = i+1<blocks.length?toMin(blocks[i+1].time):st+120, now=toMin(NOW);
+    if (opts.now && !drew && st>now){ tl.append(h("div",{class:"nowline"},"Now "+NOW)); drew=true; }
+    let cls="blk"; if(opts.now){ if(nx<=now) cls+=" past"; else if(st<=now) cls+=" now"; }
+    if (opts.mark && opts.mark[b.id]) cls+=" "+opts.mark[b.id];
+    tl.append(h("div",{class:cls},h("span",{class:"t"},b.time),
+      h("div",{style:"min-width:0"},h("div",{class:"ttl"},b.title),h("div",{class:"meta"},b.area+" · "+b.est+(b.note?" · "+b.note:""))),
+      h("div",{class:"row",style:"gap:4px;justify-content:flex-end"}, b.book?h("span",{class:"tag "+(S.booked[b.id]?"you":"plain")},S.booked[b.id]?"Booked":"To book"):null, S.verified[b.id]?h("span",{class:"tag you"},"Checked"):(b.conf!=="known"?h("span",{class:"tag warn"},"Check"):null))));
+  });
+  return tl;
+}
+function vTravel(){
+  if (!S.plan) S.plan = planFor(S.option);
+  const day = S.plan.d2; const now=toMin(NOW); const next = day.find(b=>toMin(b.time)>now);
+  return [header(5,"Saturday in Rio","During the trip Rota keeps the day in view and waits. It does not watch you or the weather; you tell it when something changes."),
+    h("div",{class:"grid2"},
+      h("div",{class:"card ai-made"},h("span",{class:"tag ai"},"Next up"),h("h2",{style:"margin-top:6px"},next?next.title:"Nothing else today"),next?h("p",{class:"small"},next.time+" · "+next.area+" · in "+(toMin(next.time)-now)+" min"):null),
+      h("div",{class:"card",style:"display:flex;flex-direction:column;gap:8px;justify-content:center"},h("p",{style:"font-weight:600"},"Did something change?"),h("button",{class:"btn you",onclick:()=>{S.done.travel=true; go("adapt");}},"Something changed"))),
+    h("div",{class:"card"},h("div",{class:"row"},h("h2",null,"Today, Sat 14 Nov"),h("span",{class:"tag plain"},"Demo clock: "+NOW)), timeline(day,{now:true})),
+    feedView("travel")];
+}
+
+// ---------- 6 adapt ----------
+const after = b => toMin(b.time) > toMin(NOW);
+function mkId(){ return "n"+Math.random().toString(36).slice(2,8); }
+const RULES = {
+  rain:{label:"Heavy rain from 13:00", you:"It's going to rain hard from 13:00.", make(day){
+      const used=new Set(day.map(b=>b.title)); const pool=INDOOR.filter(x=>!used.has(x.title)); let k=0;
+      const out = day.map(b=>{ if(after(b)&&b.outdoor&&!b.book&&!b.fixed&&pool[k]) return {...pool[k++], id:mkId(), time:b.time, conf:"check"}; return b; });
+      const sunset = out.find(b=>after(b)&&b.fixed); if (sunset && pool[k]) out.splice(out.indexOf(sunset),1,{...pool[k++],id:mkId(),time:sunset.time,conf:"check"});
+      return {day:out, reason:"You said heavy rain starts at 13:00. I kept everything indoors or already booked, and swapped the outdoor stops after lunch for indoor places nearby.",
+        assumptions:["The rain lasts the whole afternoon","The indoor places are open on Saturday"], cannot:"I can't see the radar. If it clears, the original plan is one tap away."};}},
+  closed:{label:"Next place is closed", you:"The next place is closed today.", make(day){
+      const i = day.findIndex(after); if(i<0) return null; const b=day[i];
+      const alt = b.kind==="eat" ? (EAT_ALT[b.area] ? {...EAT_ALT[b.area],kind:"eat"} : {title:"Lunch: pick a nearby place on the map", area:b.area, kind:"eat", est:b.est}) : (INDOOR.find(x=>!day.some(d=>d.title===x.title))||INDOOR[0]);
+      const out=[...day]; out[i]={...alt,id:mkId(),time:b.time,conf:"check",verify:"Open now?"};
+      return {day:out, reason:"You said “"+b.title+"” is closed. I picked an option in the same area so the rest of the day does not move.",
+        assumptions:["The alternative is open now","You don't mind a similar price"], cannot:"I can't see queues or closures. Please check before you walk over."};}},
+  tired:{label:"We're tired", you:"We're exhausted after this morning.", make(day){
+      const out=[...day]; const i = out.findIndex(b=>after(b)&&b.kind!=="eat"&&!b.book&&!b.fixed);
+      if (i>=0) out[i] = {id:mkId(), time:out[i].time, title:"Rest at the hotel (taxi, not the tram)", area:"Hotel", kind:"rest", est:"≈ R$ 35 ride", conf:"known", verify:""};
+      return {day:out, reason:"You said you're tired. I replaced the next activity with rest and kept the sunset, which is the easiest part of the afternoon.",
+        assumptions:["A two-hour rest is enough","You still want dinner out"], cannot:"Only you know how you feel. Say if you'd rather skip the evening too."};}},
+  late:{label:"We're running an hour late", you:"We're about an hour behind.", make(day){
+      let out=[...day]; const i = out.findIndex(b=>after(b)&&b.kind==="see"&&!b.book&&!b.fixed);
+      if (i>=0) out.splice(i,1);
+      out = out.map(b=> after(b)&&!b.fixed&&!b.book ? {...b, time:toHM(toMin(b.time)+30)} : b);
+      return {day:out, reason:"You're an hour late. I dropped one stop and moved the next ones 30 minutes later. The sunset doesn't move, and booked times stay as they are.",
+        assumptions:["Lunch can start 30 minutes later"], cannot:"I can't see traffic. Leave a margin if you're taking a car."};}}
+};
+function diff(oldD,newD){
+  const o=new Map(oldD.map(b=>[b.id,b])), n=new Map(newD.map(b=>[b.id,b])); const lines=[], mark={};
+  for (const b of oldD) if(!n.has(b.id)) lines.push(["rm","Remove "+b.time+" "+b.title]);
+  for (const b of newD){ if(!o.has(b.id)){ lines.push(["ad","Add "+b.time+" "+b.title]); mark[b.id]="added"; } else if(o.get(b.id).time!==b.time){ lines.push(["mv","Move "+b.title+": "+o.get(b.id).time+" → "+b.time]); mark[b.id]="moved"; } }
+  if (!lines.length) lines.push(["nt","No changes"]);
+  return {lines, mark};
+}
+function propose(kind, reasonOverride){
+  const r = RULES[kind]; const res = r.make(S.plan.d2);
+  if (!res){ toast("Nothing left to change today"); return; }
+  if (reasonOverride) res.reason = reasonOverride;
+  S.proposal = {...res, kind, label:r.label};
+  rotaSays("adapt", res.reason, 1000);
+}
+function triggerRule(kind){
+  if (S.step!=="adapt") S.step="adapt";
+  S.proposal=null; S.lastDiff=null;
+  say("adapt","you",RULES[kind].you); propose(kind);
+}
+function guessRule(t){ t=t.toLowerCase(); if(/rain|chuv|storm|wet/.test(t)) return "rain"; if(/tired|cansad|exhaust|sleep/.test(t)) return "tired"; if(/late|atras|delay|behind|traffic/.test(t)) return "late"; return "closed"; }
+async function customChange(text){
+  S.proposal=null; S.lastDiff=null; say("adapt","you",text);
+  if (live){
+    typingStep="adapt"; render();
+    const day = S.plan.d2.map(b=>({id:b.id,time:b.time,title:b.title,area:b.area,kind:b.kind,booked:!!b.book,fixed_time:!!b.fixed}));
+    try{
+      const r = await sample.json("You are Rota, a 2026 travel assistant. You cannot see live weather, traffic, queues or closures; you only know what the traveler tells you. You never book or pay.\n"+
+        "Traveler brief: "+JSON.stringify(S.brief)+"\nIt is now "+NOW+" on Saturday 14 Nov 2026 in Rio de Janeiro. Today's plan: "+JSON.stringify(day)+
+        "\nThe traveler reports: \""+text+"\"\nPropose a revised plan for the rest of today. Keep past items and booked items unchanged unless the report makes them impossible. Prefer real, well-known places. "+
+        "Reply with only JSON: {\"reason\":\"1-2 sentences to the traveler\",\"assumptions\":[\"...\"],\"cannot_know\":\"one sentence on what you can't see\",\"blocks\":[{\"keep_id\":\"id of an unchanged or moved item, or omit for a new one\",\"time\":\"HH:MM\",\"title\":\"...\",\"area\":\"neighborhood\",\"kind\":\"see|eat|rest|night\"}]}",
+        {modelTier:"default"});
+      const old = new Map(S.plan.d2.map(b=>[b.id,b]));
+      const nd = (r.blocks||[]).map(x=> x.keep_id && old.has(String(x.keep_id)) ? {...old.get(String(x.keep_id)), time:String(x.time||old.get(String(x.keep_id)).time)} : {id:mkId(),time:String(x.time||"15:00"),title:String(x.title||"New stop"),area:String(x.area||""),kind:String(x.kind||"see"),est:"Ask Rota",conf:"unsure",verify:"New suggestion from live AI"})
+        .sort((a,b)=>toMin(a.time)-toMin(b.time));
+      if (!nd.length) throw {code:"empty"};
+      S.proposal = {day:nd, reason:String(r.reason||"Here's a new version of the day."), assumptions:(r.assumptions||[]).map(String).slice(0,4), cannot:String(r.cannot_know||"I can't see live conditions."), kind:"live", label:"Live AI: "+text};
+      typingStep=null; say("adapt","rota",S.proposal.reason); return;
+    }catch(e){ typingStep=null; toast("Live AI unavailable, using the closest scripted plan"); propose(guessRule(text)); return; }
+  }
+  // Wizard of Oz: wait for the teammate, with a solo fallback
+  S.pending = {text}; typingStep="adapt"; render();
+  setTimeout(()=>{ if(S.pending && S.pending.text===text){ S.pending.fallback=true; render(); } }, 5000);
+}
+function vAdapt(){
+  if (!S.plan) S.plan = planFor(S.option);
+  const p = S.proposal; const df = p ? diff(S.plan.d2, p.day) : null;
+  const custom = h("div",{class:"card"},h("label",{for:"cText"},"Or describe what changed"),
+    h("div",{class:"row",style:"flex-wrap:nowrap"},h("input",{type:"text",id:"cText",placeholder:"e.g. Leo twisted his ankle, we need something seated",style:"flex:1;min-width:0"}),
+    h("button",{class:"btn ai",onclick:()=>{const v=$("#cText").value.trim(); if(v) customChange(v);}},"Tell Rota")),
+    h("p",{class:"small",style:"margin-top:6px"}, live?"Live AI is on: Claude writes this proposal.":"Scripted demo: a teammate answers from the Wizard console (press W)."));
+  const pend = S.pending && S.pending.fallback ? h("div",{class:"banner"},h("span",null,"No one in the Wizard console yet."),h("button",{class:"btn ghost",onclick:()=>{const t=S.pending.text; S.pending=null; typingStep=null; propose(guessRule(t));}},"Use the closest scripted plan")) : null;
+  const prop = p ? h("div",{class:"card ai-made"},
+    h("div",{class:"row"},h("span",{class:"tag ai"},"Rota proposes"),h("h2",null,"New plan for the rest of today")),
+    h("div",{class:"grid2",style:"margin-top:10px"},
+      h("div",null,h("h3",null,"What changes"),h("div",{class:"diff",style:"margin-top:6px"},df.lines.map(([c,t])=>h("div",{class:c},t)))),
+      h("div",null,h("h3",null,"Why"),h("p",{style:"margin-top:4px"},p.reason),
+        h("h3",{style:"margin-top:10px"},"What Rota assumed"),h("ul",{class:"why"},p.assumptions.map(a=>h("li",null,a))),
+        h("h3",{style:"margin-top:10px"},"What Rota can't know"),h("p",{class:"small"},p.cannot))),
+    h("div",{class:"row",style:"margin-top:14px"},
+      h("button",{class:"btn you",onclick:approve},"Approve the change"),
+      h("button",{class:"btn ghost",onclick:()=>{S.log.push("Rejected: "+p.label); S.proposal=null; say("adapt","rota","No problem, the plan stays as it was.");}},"Keep my original plan"),
+      p.kind!=="live"&&p.kind!=="rain"?null:h("button",{class:"btn ghost",onclick:()=>{const alt = p.kind==="rain"?"tired":"rain"; S.proposal=null; propose(p.kind==="live"?"rain":alt);}},"Ask for another option"))) : null;
+  return [header(6,"Something changed","You report what happened. Rota proposes a new version of the day and explains it. The plan only changes when you approve."),
+    h("div",{class:"card"},h("div",{class:"row",style:"margin-bottom:8px"},h("span",{class:"tag you"},"You report")),h("div",{class:"row"},Object.entries(RULES).map(([k,r])=>h("button",{class:"chip",onclick:()=>triggerRule(k)},r.label)))),
+    custom, feedView("adapt"), pend, prop,
+    h("div",{class:"card"},h("div",{class:"row"},h("h2",null,S.lastDiff?"Today, after your approval":"Today, current plan"),h("span",{class:"tag plain"},"Demo clock: "+NOW)), timeline(p?p.day:S.plan.d2,{now:true, mark: p?df.mark:(S.lastDiff||{})})),
+    h("div",{class:"row"}, nextBtn("End of the trip: make memories","remember"))];
+}
+function approve(){
+  const p=S.proposal; const df=diff(S.plan.d2,p.day);
+  S.plan.d2 = p.day; S.lastDiff = df.mark; S.proposal=null; S.log.push("Approved: "+p.label); S.done.adapt=true;
+  say("adapt","rota","Done. I updated today's plan and your calendar file. New places are marked “Check”.");
+  toast("Plan updated");
+}
+
+// ---------- 7 remember ----------
+function vRemember(){
+  const st = S.story;
+  const kept = st ? st.paras.filter((_,i)=>S.keep[i]!==false) : [];
+  return [header(7,"Keep the trip","After the trip, Rota turns your own notes into a short story. You choose what stays and whether anyone else sees it."),
+    h("div",{class:"card"},h("div",{class:"row",style:"margin-bottom:6px"},h("span",{class:"tag you"},"Your notes"),h("span",{class:"small"},"Rota only uses what you write here.")),
+      h("textarea",{id:"notes",style:"min-height:120px",oninput:e=>S.notes=e.target.value},S.notes),
+      h("div",{class:"row",style:"margin-top:10px"},h("button",{class:"btn ai",onclick:writeStory},st?"Write it again":"Write our trip story"))),
+    feedView("remember"),
+    st ? h("div",{class:"card ai-made story"},h("div",{class:"row"},h("span",{class:"tag ai"},"Rota drafted"),h("span",{class:"tag you"},"You choose what stays")),
+      h("h2",{style:"margin-top:8px"},st.title),
+      st.paras.map((p,i)=>h("div",{class:"para"+(S.keep[i]===false?" off":"")},h("p",null,p),h("button",{class:"chip"+(S.keep[i]===false?"":" on"),onclick:()=>{S.keep[i]=S.keep[i]===false; render();}},S.keep[i]===false?"Removed":"Keep")))) : null,
+    st ? h("div",{class:"grid2"},
+      h("div",{class:"share"},h("h3",null,st.title),kept.slice(0,2).map(p=>h("p",null,p)),h("p",{style:"font-family:var(--mono);font-size:12px;opacity:.7"},"Rio de Janeiro · 13–15 Nov 2026 · made with Rota")),
+      h("div",{class:"card",style:"display:flex;flex-direction:column;gap:10px;justify-content:center"},h("p",null,"Nothing is shared unless you copy it."),h("button",{class:"btn you",onclick:()=>{copy(st.title+"\n\n"+kept.join("\n\n")); S.log.push("Kept "+kept.length+" of "+st.paras.length+" paragraphs"); S.done.remember=true; renderStepper();}},"Copy my story"))) : null];
+}
+async function writeStory(){
+  S.keep={};
+  if (live){
+    typingStep="remember"; S.story=null; render();
+    try{
+      const r = await sample.json("You are Rota. Turn these travel notes into a warm, plain-language trip story in English for the travelers themselves. Use ONLY facts in the notes; do not invent events, people or places. 3-4 short paragraphs (max 55 words each) and a short title.\nNotes:\n"+S.notes.slice(0,4000)+
+        "\nReply with only JSON: {\"title\":\"...\",\"paras\":[\"...\"]}", {modelTier:"default", cache:false});
+      S.story = {title:String(r.title||"Our trip"), paras:(r.paras||[]).map(String).slice(0,5)};
+      if (!S.story.paras.length) throw 0;
+      typingStep=null; say("remember","rota","Here's a draft. I only used what's in your notes. Remove anything you don't want to keep."); return;
+    }catch(e){ typingStep=null; toast("Live AI unavailable, showing the scripted story"); }
+  }
+  S.story = SCRIPTED_STORY;
+  rotaSays("remember","Here's a draft. I only used what's in your notes. Remove anything you don't want to keep.",1200);
+}
+
+// ---------- wizard ----------
+function renderWizard(){
+  const p = $("#wzPending"); p.replaceChildren();
+  if (S.pending) p.append(h("div",{class:"wz-pending"},h("b",null,"Traveler asked: "),S.pending.text,
+    h("div",{class:"row",style:"margin-top:6px"},h("span",{class:"small"},"Answer with:"),Object.entries(RULES).map(([k,r])=>h("button",{class:"chip",onclick:()=>{const t=$("#wzText").value.trim(); S.pending=null; typingStep=null; propose(k, t||null); $("#wzText").value="";}},r.label.split(" ").slice(0,2).join(" "))))));
+}
+function initWizard(){
+  $("#wzTriggers").replaceChildren(...Object.entries(RULES).map(([k,r])=>h("button",{class:"chip",onclick:()=>triggerRule(k)},r.label)));
+  $("#wzJump").replaceChildren(...STEPS.map((s,i)=>h("button",{class:"chip",onclick:()=>go(s.id)},(i+1)+" "+s.name)));
+  $("#wzSend").onclick = ()=>{ const t=$("#wzText").value.trim(); if(!t) return; $("#wzText").value="";
+    if ($("#wzTyping").checked) rotaSays(S.step,t,1300); else say(S.step,"rota",t); };
+  const tog = ()=>{ $("#wizard").hidden=!$("#wizard").hidden; if(!$("#wizard").hidden) $("#wzText").focus(); };
+  $("#wizBtn").onclick = tog; $("#wizClose").onclick = tog;
+  document.addEventListener("keydown",e=>{ if((e.key==="w"||e.key==="W") && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !e.ctrlKey && !e.metaKey){ e.preventDefault(); tog(); } });
+}
+
+// ---------- boot ----------
+$("#rolesBtn").onclick = e=>{ const on = document.body.classList.toggle("noroles"); e.target.textContent = on?"Roles: off":"Roles: on"; e.target.setAttribute("aria-pressed",String(!on)); };
+$("#resetBtn").onclick = ()=>{ S = fresh(); render(); toast("Restarted"); };
+$("#liveBtn").onclick = ()=>{ live=!live; $("#modePill").textContent= live?"Live AI on":"Scripted demo"; $("#modePill").classList.toggle("live",live); $("#liveBtn").textContent = live?"Use scripted demo":"Use live AI"; render(); toast(live?"Live AI on: Claude answers (asks your permission first)":"Scripted demo"); };
+initWizard();
+// deep links for screenshots and rehearsals: #brief … #remember, plus #adapt-rain and #remember-story
+(function fromHash(){
+  const t = (location.hash||"").slice(1); if(!t) return;
+  const [step, extra] = t.split("-");
+  if (!STEPS.some(s=>s.id===step)) return;
+  if (step!=="brief"){ S.plan=planFor(S.option); S.briefSent=true; S.briefOk=true; FOLLOWUPS.forEach((f,i)=>S.answers[i]=f.opts[0]); STEPS.slice(0,STEPS.findIndex(s=>s.id===step)).forEach(s=>S.done[s.id]=true); }
+  if (step==="check"){ ["l11","l12","l21","l23"].forEach(id=>S.verified[id]=true); }
+  if (step==="book" || step==="travel" || step==="adapt"){ ["l11","l12","l21","l23"].forEach(id=>S.verified[id]=true); S.booked.l21=true; }
+  if (step==="brief" && extra==="asked"){ S.briefSent=true; S.feeds.brief.push({who:"you",text:"Here's my trip: Rio de Janeiro, Fri 13 – Sun 15 Nov 2026, 2 adults (Ana and Leo). Budget R$ 1,800 for two. Pace: Balanced."},{who:"rota",text:"Thanks! Three quick questions so I don't guess."}); S.answers={0:"Christ + Sugarloaf",1:"Fine before 8am"}; }
+  S.step=step;
+  if (step==="adapt" && extra){ const r=RULES[extra]; if(r){ S.feeds.adapt.push({who:"you",text:r.you}); const res=r.make(S.plan.d2); S.proposal={...res,kind:extra,label:r.label}; S.feeds.adapt.push({who:"rota",text:res.reason}); } }
+  if (step==="remember" && extra==="story"){ S.story=SCRIPTED_STORY; S.keep={3:true}; }
+})();
+render();
+(async ()=>{ try{ if (window.claude){ sample = await window.claude.use("sample"); if (sample){ $("#liveBtn").hidden=false; } } }catch{} })();
+})();
+</script>
+</body></html>
